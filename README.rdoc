@@ -1,0 +1,11 @@
+
+= live_ast_ripper
+
+== Summary
+
+A Ripper-based parser plug-in for LiveAST.
+
+== Description
+
+The nested TestForms module enables testing with the LiveAST test
+suite.
