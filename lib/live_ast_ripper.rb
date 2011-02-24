@@ -11,7 +11,10 @@ module LiveAST
       attr_accessor :steamroll
     end
     
-    # Output an AST corresponding to a ruby source string.
+    #
+    # Returns a line --> sexp hash where sexp corresponds to the
+    # method or block defined at the given line.
+    #
     def parse(code)
       @defs = {}
       process(Ripper.sexp(code))
