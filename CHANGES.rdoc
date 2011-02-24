@@ -1,0 +1,6 @@
+
+= live_ast_ripper ChangeLog
+
+== Version 0.3.0
+
+* initial release
