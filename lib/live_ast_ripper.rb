@@ -1,3 +1,4 @@
+require 'live_ast/base'
 require 'ripper'
 
 class LiveASTRipper
@@ -95,6 +96,4 @@ end
 
 LiveASTRipper.autoload :TestForms, "live_ast_ripper/test_forms"
 
-module LiveAST
-  @parser = LiveASTRipper
-end
+LiveAST.parser = LiveASTRipper
