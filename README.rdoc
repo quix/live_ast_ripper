@@ -5,17 +5,17 @@
 
 A Ripper-based parser plug-in for LiveAST.
 
-== Description
-
-The nested TestForms module enables testing with the LiveAST test
-suite.
-
 == Links
 
 * Home: http://quix.github.com/live_ast_ripper
 * Feature Requests, Bug Reports: http://github.com/quix/live_ast_ripper/issues
 * Manual Download: http://github.com/quix/live_ast_ripper/archives/master
 * Repository: http://github.com/quix/live_ast_ripper
+
+== Known Issues
+
+* Ripper does not report the line number of <code>-></code> (stabby
+  lambda). Therefore the ASTs of stabby lambdas are not available.
 
 == Author
 
