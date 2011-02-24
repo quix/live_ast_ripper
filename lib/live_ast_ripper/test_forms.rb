@@ -1,8 +1,6 @@
 
-# testing assumes sexps are steamrolled
-LiveAST::Parser.steamroll = true
-
-module LiveAST::Parser::TestForms
+# For testing with LiveAST.
+module LiveASTRipper::TestForms
   #
   # no_arg_def(:f, "A#f") returns the ast of
   #
@@ -214,3 +212,6 @@ module LiveAST::Parser::TestForms
         [:var_ref, [:@ident, "y"]]]]]]
   end
 end
+
+# testing assumes sexps are steamrolled
+LiveASTRipper.steamroll = true
