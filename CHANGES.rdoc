@@ -1,10 +1,18 @@
 
 = live_ast_ripper ChangeLog
 
-== Version 0.4.0
+== Version 0.5.1
+
+* doc fixes
+
+== Version 0.5.0
+
+* new plugin API
+
+== Version 0.4.0  X yanked
 
 * new parser plugin design to work around obscure autoload failure
 
-== Version 0.3.0
+== Version 0.3.0  X yanked
 
 * initial release
