@@ -3,7 +3,11 @@
 
 == Summary
 
-A Ripper-based parser plug-in for LiveAST.
+A Ripper-based parser plugin for LiveAST.
+
+== Install
+
+  % gem install live_ast_ripper
 
 == Links
 
