@@ -41,10 +41,7 @@ class LiveASTRipper
     result << process(sexp.shift)
     result << process(sexp.shift)
 
-    result = steamroll(result) if LiveASTRipper.steamroll
     store_sexp(result, line)
-
-    []
   end
 
   def process_method_add_block(sexp)
@@ -63,14 +60,20 @@ class LiveASTRipper
     result << process(sexp.shift)
     result << process(sexp.shift)
     
-    result = steamroll(result) if LiveASTRipper.steamroll
     store_sexp(result, line)
-
-    []
   end
 
   def store_sexp(sexp, line)
-    @defs[line] = @defs.has_key?(line) ? :multiple : sexp
+    @defs[line] = 
+      if @defs.has_key?(line)
+        :multiple
+      elsif LiveASTRipper.steamroll
+        steamroll(sexp)
+      else
+        sexp
+      end
+
+    sexp
   end
 
   def steamroll(sexp)

@@ -213,6 +213,64 @@ module LiveASTRipper::Test
         op,
         [:var_ref, [:@ident, "y"]]]]]]
   end
+
+  #
+  # nested_lambdas("foo") returns the ast of
+  #
+  #   lambda {
+  #     lambda {
+  #       "foo"
+  #     }
+  #   }
+  #  
+  def nested_lambdas(str)
+    [:method_add_block,
+     [:method_add_arg, [:fcall, [:@ident, "lambda"]], []],
+     [:block,
+      nil,
+      [[:method_add_block,
+        [:method_add_arg, [:fcall, [:@ident, "lambda"]], []],
+        [:block,
+         nil,
+         [[:string_literal,
+           [:string_content, [:@tstring_content, str]]]]]]]]]
+  end
+    
+  # nested_defs(:f, :g, "foo") returns the ast of
+  #
+  #   def f
+  #     Class.new do
+  #       def g
+  #         "foo"
+  #       end
+  #     end
+  #   end
+  #   
+  def nested_defs(u, v, str)
+    [:def,
+     [:@ident, u.to_s],
+     [:params, nil, nil, nil, nil, nil],
+     [:bodystmt,
+      [[:method_add_block,
+        [:call,
+         [:var_ref, [:@const, "Class"]],
+         :".",
+         [:@ident, "new"]],
+        [:block,
+         nil,
+         [[:def,
+           [:@ident, v.to_s],
+           [:params, nil, nil, nil, nil, nil],
+           [:bodystmt,
+            [[:string_literal,
+              [:string_content, [:@tstring_content, str]]]],
+            nil,
+            nil,
+            nil]]]]]],
+      nil,
+      nil,
+      nil]]
+  end
 end
 
 #
