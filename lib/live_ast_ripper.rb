@@ -20,47 +20,26 @@ class LiveASTRipper
   end
 
   def process(sexp)
-    case sexp[0]
-    when :def
-      process_def(sexp)
-    when :method_add_block
-      process_method_add_block(sexp)
-    else
-      sexp.map { |elem|
-        elem.is_a?(Array) ? process(elem) : elem
-      }
-    end
-  end
-  
-  def process_def(sexp)
-    line = sexp[1][2][0]
-
-    result = []
-    result << sexp.shift
-    result << sexp.shift
-    result << process(sexp.shift)
-    result << process(sexp.shift)
-
-    store_sexp(result, line)
-  end
-
-  def process_method_add_block(sexp)
-    line = 
-      case sexp[1][0]
-      when :method_add_arg
-        sexp[1][1][1].last[0]
-      when :call, :command_call
-        sexp[1][3][2][0]
-      when :command
-        sexp[1][1][2][0]
+    line =
+      case sexp.first
+      when :def
+        sexp[1][2][0]
+      when :method_add_block
+        case sexp[1][0]
+        when :method_add_arg
+          sexp[1][1][1].last[0]
+        when :call, :command_call
+          sexp[1][3][2][0]
+        when :command
+          sexp[1][1][2][0]
+        end
       end
 
-    result = []
-    result << sexp.shift
-    result << process(sexp.shift)
-    result << process(sexp.shift)
-    
-    store_sexp(result, line)
+    store_sexp(sexp, line) if line
+
+    sexp.each do |elem|
+      process(elem) if elem.is_a? Array
+    end
   end
 
   def store_sexp(sexp, line)
