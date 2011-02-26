@@ -7,6 +7,8 @@ Jumpstart.new "live_ast_ripper" do |s|
   s.description = s.summary
 end
 
-# testing done inside live_ast
 task :test do
+  puts "Testing is done with LiveAST test suite."
 end
+
+task :default => :test
