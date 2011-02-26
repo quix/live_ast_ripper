@@ -5,8 +5,6 @@ require 'ripper'
 # Ripper-based parser plugin for LiveAST.
 #
 class LiveASTRipper
-  VERSION = "0.6.0"
-
   #
   # Returns a line-to-sexp hash where sexp corresponds to the method
   # or block defined at the given line.
