@@ -35,37 +35,26 @@ class LiveASTRipper
         end
       end
 
-    store_sexp(sexp, line) if line
+    if line
+      @defs[line] = @defs.has_key?(line) ? :multiple : sexp
+    end
+
+    steamroll(sexp) if LiveASTRipper.steamroll
 
     sexp.each do |elem|
       process(elem) if elem.is_a? Array
     end
   end
 
-  def store_sexp(sexp, line)
-    @defs[line] = 
-      if @defs.has_key?(line)
-        :multiple
-      elsif LiveASTRipper.steamroll
-        steamroll(sexp)
-      else
-        sexp
-      end
-
-    sexp
-  end
-
   def steamroll(sexp)
-    sexp.map { |elem|
-      if elem.is_a? Array
-        sub_elem = 
-          if elem[0].is_a?(Symbol) and elem[0][0] == "@"
-            elem[0..-2]
-          else
-            elem
-          end
-        steamroll(sub_elem)
-      elsif elem == :brace_block or elem == :do_block
+    if sexp.first.is_a?(Symbol) and sexp.first[0] == "@"
+      # remove [line, column]
+      sexp.pop
+    end
+    
+    sexp.map! { |elem|
+      case elem
+      when :brace_block, :do_block
         :block
       else
         elem
