@@ -1,6 +1,8 @@
 
-# For testing with LiveAST.
-module LiveASTRipper::TestForms
+#
+# Used by the LiveAST test suite.
+#
+module LiveASTRipper::Test
   #
   # no_arg_def(:f, "A#f") returns the ast of
   #
@@ -213,5 +215,7 @@ module LiveASTRipper::TestForms
   end
 end
 
+#
 # testing assumes sexps are steamrolled
+#
 LiveASTRipper.steamroll = true

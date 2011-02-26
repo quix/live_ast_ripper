@@ -1,19 +1,17 @@
 require 'live_ast/base'
 require 'ripper'
 
+#
+# Ripper-based parser plugin for LiveAST.
+#
 class LiveASTRipper
-  class << self
-    #
-    # Whether to strip line/column and other personality traits.
-    #
-    # This is Ripper-specific -- not part of the live_ast API.
-    #
-    attr_accessor :steamroll
-  end
-  
+  VERSION = "0.6.0"
+
   #
-  # Returns a line --> sexp hash where sexp corresponds to the
-  # method or block defined at the given line.
+  # Returns a line-to-sexp hash where sexp corresponds to the method
+  # or block defined at the given line.
+  #
+  # This method is the only requirement of a LiveAST parser plugin.
   #
   def parse(code)
     @defs = {}
@@ -92,8 +90,15 @@ class LiveASTRipper
       end
     }
   end
+
+  class << self
+    #
+    # Whether to strip line/column and other personality traits.
+    #
+    attr_accessor :steamroll
+  end
 end
 
-LiveASTRipper.autoload :TestForms, "live_ast_ripper/test_forms"
+LiveASTRipper.autoload :Test, "live_ast_ripper/test"
 
 LiveAST.parser = LiveASTRipper
