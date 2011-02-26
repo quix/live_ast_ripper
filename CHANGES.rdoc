@@ -1,6 +1,12 @@
 
 = live_ast_ripper ChangeLog
 
+== Version 0.6.0
+
+* added new testing API methods
+* fixed a recursion issue
+* optimized
+
 == Version 0.5.1
 
 * doc fixes
