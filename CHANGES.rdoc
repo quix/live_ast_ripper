@@ -1,5 +1,9 @@
 
-= live_ast_ripper ChangeLog
+= live_ast_ripper Changes
+
+== Version 0.6.1
+
+* fix class/module in version.rb
 
 == Version 0.6.0
 
