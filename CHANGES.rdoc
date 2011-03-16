@@ -1,6 +1,10 @@
 
 = live_ast_ripper Changes
 
+== Version 0.6.2
+
+* add required_ruby_version to gemspec
+
 == Version 0.6.1
 
 * fix class/module in version.rb
