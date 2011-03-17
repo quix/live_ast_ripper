@@ -1,6 +1,10 @@
 
 = live_ast_ripper Changes
 
+== Version 0.6.3
+
+* add public method steamroll_ast for steamrolling individual asts
+
 == Version 0.6.2
 
 * add required_ruby_version to gemspec
