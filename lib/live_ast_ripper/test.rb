@@ -23,6 +23,27 @@ module LiveASTRipper::Test
   end
 
   #
+  # singleton_no_arg_def(:f, "foo") returns the ast of
+  #
+  #   def self.f
+  #     "foo"
+  #   end
+  #
+  def singleton_no_arg_def(name, ret)
+    [:defs,
+     [:var_ref, [:@kw, "self"]],
+     [:@period, "."],
+     [:@ident, name.to_s],
+     [:params, nil, nil, nil, nil, nil],
+     [:bodystmt,
+      [[:string_literal,
+        [:string_content, [:@tstring_content, ret]]]],
+      nil,
+      nil,
+      nil]]
+  end
+
+  #
   # no_arg_def_return(no_arg_def(:f, "A#f")) == "A#f"
   #
   def no_arg_def_return(ast)
@@ -50,6 +71,35 @@ module LiveASTRipper::Test
       [[:binary,
         [:var_ref, [:@ident, "x"]],
         op,
+        [:var_ref, [:@ident, "y"]]]],
+      nil,
+      nil,
+      nil]]
+  end
+
+  #
+  # singleton_binop_def(:A, :f, :+) returns the ast of
+  #
+  #   def A.f(x, y)
+  #     x + y
+  #   end
+  #
+  def singleton_binop_def(const, name, op)
+    [:defs,
+     [:var_ref, [:@const, const.to_s]],
+     [:@period, "."],
+     [:@ident, name.to_s],
+     [:paren,
+      [:params,
+       [[:@ident, "x"], [:@ident, "y"]],
+       nil,
+       nil,
+       nil,
+       nil]],
+     [:bodystmt,
+      [[:binary,
+        [:var_ref, [:@ident, "x"]],
+        :+,
         [:var_ref, [:@ident, "y"]]]],
       nil,
       nil,

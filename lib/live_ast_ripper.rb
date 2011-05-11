@@ -32,6 +32,8 @@ class LiveASTRipper
     case sexp.first
     when :def
       sexp[1][2][0]
+    when :defs
+      sexp[3][2][0]
     when :method_add_block
       case sexp[1][0]
       when :method_add_arg
