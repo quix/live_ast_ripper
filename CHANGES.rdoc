@@ -1,6 +1,10 @@
 
 = live_ast_ripper Changes
 
+== Version 0.6.4
+
+* handlers for "def self.foo" and "def A.foo" were missing
+
 == Version 0.6.3
 
 * add public method steamroll_ast for steamrolling individual asts
