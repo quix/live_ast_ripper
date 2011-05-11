@@ -1,32 +1,230 @@
 
 class Levitate
-  def initialize(gem_name)
-    @gem_name = gem_name
+  class Installer
+    def initialize
+      require 'fileutils'
+      require 'rbconfig'
+      require 'find'
 
+      rb_root = RbConfig::CONFIG["sitelibdir"]
+      @spec = []
+
+      Find.find "lib" do |source|
+        next if source == "lib"
+        next unless File.directory?(source) || File.extname(source) == ".rb"
+        dest = File.join(rb_root, source.sub(%r!\Alib/!, ""))
+        @spec << { :source => source, :dest => dest }
+      end
+    end
+  
+    def install
+      @spec.each do |entry|
+        source, dest = entry.values_at(:source, :dest)
+        if File.directory?(source)
+          unless File.directory?(dest)
+            puts "mkdir #{dest}"
+            FileUtils.mkdir(dest)
+          end
+        else
+          puts "install #{source} --> #{dest}"
+          FileUtils.install(source, dest)
+        end
+      end
+    end
+  
+    def uninstall
+      @spec.reverse.each do |entry|
+        source, dest = entry.values_at(:source, :dest)
+        if File.directory?(source)
+          if File.directory?(dest)
+            puts "rmdir #{dest}"
+            FileUtils.rmdir(dest)
+          end
+        else
+          if File.file?(dest)
+            puts "rm #{dest}"
+            FileUtils.rm(dest)
+          end
+        end
+      end
+    end
+  end
+
+  module AttrLazy
+    def attr_lazy(name, &block)
+      AttrLazy.define_reader(class << self ; self ; end, name, &block)
+    end
+
+    def attr_lazy_accessor(name, &block)
+      attr_lazy(name, &block)
+      AttrLazy.define_writer(class << self ; self ; end, name, &block)
+    end
+
+    class << self
+      def included(mod)
+        (class << mod ; self ; end).class_eval do
+          def attr_lazy(name, &block)
+            AttrLazy.define_reader(self, name, &block)
+          end
+
+          def attr_lazy_accessor(name, &block)
+            attr_lazy(name, &block)
+            AttrLazy.define_writer(self, name, &block)
+          end
+        end
+      end
+
+      def define_evaluated_reader(instance, name, value)
+        (class << instance ; self ; end).class_eval do
+          remove_method name rescue nil
+          define_method name do
+            value
+          end
+        end
+      end
+
+      def define_reader(klass, name, &block)
+        klass.class_eval do
+          remove_method name rescue nil
+          define_method name do
+            value = instance_eval(&block)
+            AttrLazy.define_evaluated_reader(self, name, value)
+            value
+          end
+        end
+      end
+
+      def define_writer(klass, name, &block)
+        klass.class_eval do
+          writer = "#{name}="
+          remove_method writer rescue nil
+          define_method writer do |value|
+            AttrLazy.define_evaluated_reader(self, name, value)
+            value
+          end
+        end
+      end
+    end
+  end
+
+  module Ruby
+    module_function
+
+    def executable
+      require 'rbconfig'
+
+      name = File.join(
+        RbConfig::CONFIG["bindir"],
+        RbConfig::CONFIG["RUBY_INSTALL_NAME"]
+      )
+
+      if RbConfig::CONFIG["host"] =~ %r!(mswin|cygwin|mingw)! and
+          File.basename(name) !~ %r!\.(exe|com|bat|cmd)\Z!i
+        name + RbConfig::CONFIG["EXEEXT"]
+      else
+        name
+      end
+    end
+
+    def run(*args)
+      cmd = [executable, *args]
+      unless system(*cmd)
+        cmd_str = cmd.map { |t| "'#{t}'" }.join(", ")
+        raise "system(#{cmd_str}) failed with status #{$?.exitstatus}"
+      end
+    end
+
+    def run_code_and_capture(code)
+      IO.popen(%{"#{executable}"}, "r+") { |pipe|
+        pipe.print(code)
+        pipe.flush
+        pipe.close_write
+        pipe.read
+      }
+    end
+
+    def run_file_and_capture(file)
+      unless File.file? file
+        raise "file does not exist: `#{file}'"
+      end
+      IO.popen(%{"#{executable}" "#{file}"}, "r") { |pipe|
+        pipe.read
+      }
+    end
+      
+    def with_warnings(value = true)
+      previous = $VERBOSE
+      $VERBOSE = value
+      begin
+        yield
+      ensure
+        $VERBOSE = previous
+      end
+    end
+      
+    def no_warnings(&block)
+      with_warnings(nil, &block)
+    end
+  end
+
+  module Util
+    module_function
+
+    def run_ruby_on_each(*files)
+      files.each { |file|
+        Ruby.run("-w", file)
+      }
+    end
+
+    def to_camel_case(str)
+      str.split('_').map { |t| t.capitalize }.join
+    end
+
+    def write_file(file)
+      contents = yield
+      File.open(file, "wb") { |out|
+        out.print(contents)
+      }
+      contents
+    end
+
+    def instance_exec2(obj, *args, &block)
+      method_name = ["_", obj.object_id, "_", Thread.current.object_id].join
+      (class << obj ; self ; end).class_eval do
+        define_method method_name, &block
+        begin
+          obj.send(method_name, *args)
+        ensure
+          remove_method method_name
+        end
+      end
+    end
+  end
+
+  include AttrLazy
+  include Util
+
+  def initialize(gem_name)
     $LOAD_PATH.unshift File.expand_path(File.dirname(__FILE__) + '/../lib')
+
+    require 'rubygems/package_task'
+
+    @gem_name = gem_name
 
     yield self
 
-    self.class.instance_methods(false).each do |name|
-      if name.to_s =~ %r!\Adefine_!
-        send(name)
-      end
-    end
+    self.class.instance_methods(false).select { |t|
+      t.to_s =~ %r!\Adefine_!
+    }.sort.each { |method_name|
+      send(method_name)
+    }
+  end
+
+  class << self
+    alias_method :attribute, :attr_lazy_accessor
   end
 
   attr_reader :gem_name
-
-  def self.attribute(name, &block)
-    var = :"@#{name}"
-    define_method name do
-      if instance_variable_defined?(var)
-        instance_variable_get(var)
-      else
-        instance_variable_set(var, instance_eval(&block))
-      end
-    end
-    attr_writer name
-  end
 
   attribute :version_constant_name do
     "VERSION"
@@ -90,9 +288,15 @@ class Levitate
     "spec.html"
   end
 
-  attribute :spec_output do
+  attr_lazy :spec_output do
     "#{spec_output_dir}/#{spec_output_file}"
   end
+
+  [:gem, :tgz].each { |ext|
+    attribute ext do
+      "pkg/#{gem_name}-#{version}.#{ext}"
+    end
+  }
 
   attribute :rcov_options do
     # workaround for the default rspec task
@@ -105,6 +309,14 @@ class Levitate
     } + ["--text-report"]
   end
 
+  attribute :readme_file do
+    "README.rdoc"
+  end
+    
+  attribute :manifest_file do
+    "MANIFEST"
+  end
+
   attribute :generated_files do
     []
   end
@@ -114,9 +326,17 @@ class Levitate
   end
 
   attribute :files do
-    if source_control?
+    if File.file? manifest_file
+      File.read(manifest_file).split("\n")
+    elsif source_control?
       IO.popen("git ls-files") { |pipe| pipe.read.split "\n" }
-    end.to_a + generated_files
+    end.to_a + [manifest_file] + generated_files
+  end
+
+  def files_in_require_paths
+    require_paths.inject([]) { |acc, dir|
+      acc + Dir.glob("#{dir}/**/*.rb")
+    }
   end
 
   attribute :rdoc_files do
@@ -160,6 +380,8 @@ class Levitate
   attribute :gemspec do
     Gem::Specification.new do |g|
       %w[
+        authors
+        email
         summary
         version
         description
@@ -168,6 +390,7 @@ class Levitate
         extra_rdoc_files
         require_paths
         required_ruby_version
+        extensions
       ].each do |param|
         t = send(param) and g.send("#{param}=", t)
       end
@@ -180,8 +403,6 @@ class Levitate
       development_dependencies.each { |dep|
         g.add_development_dependency(*dep)
       }
-      g.authors = developers.map { |d| d[0] }
-      g.email =   developers.map { |d| d[1] }
       extra_gemspec.call(g)
     end
   end
@@ -246,6 +467,14 @@ class Levitate
     nil
   end
 
+  def authors
+    developers.map { |d| d[0] }
+  end
+
+  def email
+    developers.map { |d| d[1] }
+  end
+
   attribute :dependencies do
     []
   end
@@ -258,17 +487,16 @@ class Levitate
     []
   end
 
-  attribute :remote_levitate do
-    url = ENV["LEVITATE"] ||
-      "https://github.com/quix/levitate/raw/master/levitate.rb"
-    IO.popen("curl -s #{url}") { |f| f.read }
+  attribute :extensions do
+    ["ext/#{gem_name}/extconf.rb"].select { |f| File.file? f }
   end
-
-  attribute :local_levitate do
-    File.open(__FILE__, "rb") { |f| f.read }
+  
+  attribute :so_file do
+    unless extensions.empty?
+      require 'rbconfig'
+      "lib/" + gem_name + "." + RbConfig::CONFIG["DLEXT"]
+    end
   end
-
-  #### tasks
 
   def define_clean
     require 'rake/clean'
@@ -279,8 +507,10 @@ class Levitate
 
   def define_package
     if source_control?
-      require 'rubygems/package_task'
-
+      task manifest_file do
+        create_manifest
+      end
+      CLEAN.add manifest_file
       task :package => :clean
       Gem::PackageTask.new(gemspec).define
     end
@@ -288,7 +518,7 @@ class Levitate
 
   def define_spec
     unless spec_files.empty?
-      no_warnings {
+      Ruby.no_warnings {
         require 'spec/rake/spectask'
       }
       
@@ -320,7 +550,7 @@ class Levitate
 
       desc "run specs individually"
       task :spec_deps do
-        run_each_file(*spec_files)
+        run_ruby_on_each(*spec_files)
       end
 
       task :prerelease => [:spec, :spec_deps]
@@ -376,7 +606,7 @@ class Levitate
       
       desc "run tests individually"
       task :test_deps do
-        run_each_file(*test_files)
+        run_ruby_on_each(*test_files)
       end
       
       task :prerelease => [:test, :test_deps]
@@ -389,7 +619,7 @@ class Levitate
   def define_doc
     desc "run rdoc"
     task :doc => :clean_doc do
-      gem 'rdoc' rescue nil
+      Kernel.send :gem, 'rdoc' rescue nil
       require 'rdoc/rdoc'
       args = (
         gemspec.rdoc_options +
@@ -418,7 +648,6 @@ class Levitate
     if source_control?
       desc "publish docs"
       task :publish => [:clean, :check_directory, :doc] do
-        current_branch = `git branch`[/^\* (\S+)$/, 1] or raise "??? branch"
         if rubyforge_info
           user, project = rubyforge_info
           Dir.chdir(doc_dir) do
@@ -437,7 +666,6 @@ class Levitate
         FileUtils.rmdir "doc"
         git "add", "."
         git "commit", "-m", "generated by rdoc"
-        git "checkout", current_branch
         git "push", "-f", "origin", "gh-pages"
       end
     end
@@ -453,6 +681,22 @@ class Levitate
     task :uninstall do
       Installer.new.uninstall
     end
+
+    if so_file
+      dest = File.join(RbConfig::CONFIG["sitearchdir"], File.basename(so_file))
+
+      task :install => so_file do
+        puts "install #{so_file} --> #{dest}"
+        FileUtils.install(so_file, dest)
+      end
+
+      task :uninstall do
+        if File.file?(dest)
+          puts "rm #{dest}"
+          FileUtils.rm(dest)
+        end
+      end
+    end
   end
   
   def define_check_directory
@@ -466,10 +710,7 @@ class Levitate
   def define_ping
     task :ping do
       require 'rbconfig'
-      [
-       "github.com",
-       ("rubyforge.org" if rubyforge_info),
-      ].compact.each do |server|
+      %w[github.com].each { |server|
         cmd = "ping " + (
           if RbConfig::CONFIG["host"] =~ %r!darwin!
             "-c2 #{server}"
@@ -480,26 +721,23 @@ class Levitate
         unless `#{cmd}` =~ %r!0% packet loss!
           raise "No ping for #{server}"
         end
-      end
-    end
-  end
-
-  def define_check_levitate
-    task :check_levitate do
-      unless local_levitate == remote_levitate
-        raise "levitate is out of date"
-      end
+      }
     end
   end
 
   def define_update_levitate
+    url = ENV["LEVITATE"] ||
+      "https://github.com/quix/levitate/raw/master/levitate.rb"
     task :update_levitate do
-      if local_levitate == remote_levitate
-        puts "Already up-to-date."
+      if system "curl", "-s", "-o", __FILE__, url
+        if `git diff #{__FILE__}` == ""
+          puts "Already up-to-date."
+        else
+          git "commit", __FILE__, "-m", "updated levitate"
+          puts "Updated levitate."
+        end
       else
-        File.open(__FILE__, "w") { |f| f.print(remote_levitate) }
-        git "commit", __FILE__, "-m", "update levitate"
-        puts "Updated levitate."
+        raise "levitate download failed"
       end
     end
   end
@@ -524,38 +762,6 @@ class Levitate
     end
   end
 
-  def define_release
-    task :prerelease => [
-      :clean,
-      :check_directory,
-      :check_levitate,
-      :ping,
-      history_file
-    ]
-
-    task :finish_release do
-      git "tag", "#{gem_name}-" + version.to_s
-      git "push", "--tags", "origin", "master"
-      sh "gem", "push", "pkg/#{gem_name}-#{version}.gem"
-    end
-
-    task :release => [:prerelease, :package, :finish_release, :publish]
-  end
-
-  def define_debug_gem
-    task :debug_gem do
-      puts gemspec.to_ruby
-    end
-  end
-
-  #### helpers
-
-  def files_in_require_paths
-    require_paths.inject([]) { |acc, dir|
-      acc + Dir.glob("#{dir}/**/*.rb")
-    }
-  end
-
   def last_release
     `git tag`.lines.select { |t| t.index(gem_name) == 0 }.last.chomp
   end
@@ -564,6 +770,58 @@ class Levitate
     sh "git", *args
   end
 
+  def create_manifest
+    write_file(manifest_file) {
+      files.sort.join("\n")
+    }
+  end
+
+  def define_release
+    task :prerelease => [:clean, :check_directory, :ping, history_file]
+
+    task :finish_release do
+      git "tag", "#{gem_name}-" + version.to_s
+      git "push", "--tags", "origin", "master"
+      sh "gem", "push", gem
+    end
+
+    task :release => [:prerelease, :package, :finish_release]
+  end
+
+  def define_debug_gem
+    task :debug_gem do
+      puts gemspec.to_ruby
+    end
+  end
+
+  def define_extension
+    if so_file and (source_control? or !File.file?(so_file))
+      require 'rbconfig'
+      require 'rake/extensiontask'
+      
+      Rake::ExtensionTask.new gem_name, gemspec do |ext|
+        ext.cross_compile = true
+        ext.cross_platform = 'i386-mswin32'
+        ext.cross_compiling do |gemspec|
+          gemspec.post_install_message =
+            "U got dat binary versionation of this gemination!"
+        end
+      end
+
+      if Rake::Task[so_file].needed?
+        task :test => so_file
+      end
+
+      task :cross_native_gem do
+        Rake::Task[:gem].reenable
+        Rake.application.top_level_tasks.replace %w[cross native gem]
+        Rake.application.top_level
+      end
+
+      task :gem => :cross_native_gem
+    end
+  end
+  
   def open_browser(*files)
     sh(*([browser].flatten + files))
   end
@@ -572,7 +830,7 @@ class Levitate
     task_names.each { |task_name|
       Rake::Task[task_name].actions.map! { |action|
         lambda { |*args|
-          no_warnings {
+          Ruby.no_warnings {
             action.call(*args)
           }
         }
@@ -588,110 +846,10 @@ class Levitate
     File.directory? ".git"
   end
 
-  #### utility for instance and class
-
-  module Util
-    def ruby_bin
-      require 'rbconfig'
-
-      name = File.join(
-        RbConfig::CONFIG["bindir"],
-        RbConfig::CONFIG["RUBY_INSTALL_NAME"]
-      )
-
-      if RbConfig::CONFIG["host"] =~ %r!(mswin|cygwin|mingw)! and
-          File.basename(name) !~ %r!\.(exe|com|bat|cmd)\Z!i
-        name + RbConfig::CONFIG["EXEEXT"]
-      else
-        name
-      end
-    end
-
-    def ruby_command
-      [ruby_bin] + Levitate.ruby_opts.to_a
-    end
-
-    def ruby_command_string
-      ruby_command.join(" ")
-    end
-
-    def run(*args)
-      cmd = ruby_command + args
-      unless system(*cmd)
-        cmd_str = cmd.map { |t| "'#{t}'" }.join(", ")
-        raise "system(#{cmd_str}) failed with status #{$?.exitstatus}"
-      end
-    end
-
-    def run_each_file(*files)
-      files.each { |file|
-        run("-w", file)
-      }
-    end
-
-    def run_code_and_capture(code)
-      IO.popen(ruby_command_string, "r+") { |pipe|
-        pipe.print(code)
-        pipe.flush
-        pipe.close_write
-        pipe.read
-      }
-    end
-
-    def run_file_and_capture(file)
-      unless File.file? file
-        raise "file does not exist: `#{file}'"
-      end
-      IO.popen(ruby_command_string + " " + file, "r") { |pipe|
-        pipe.read
-      }
-    end
-      
-    def with_warnings(value = true)
-      previous = $VERBOSE
-      $VERBOSE = value
-      begin
-        yield
-      ensure
-        $VERBOSE = previous
-      end
-    end
-      
-    def no_warnings(&block)
-      with_warnings(nil, &block)
-    end
-
-    def to_camel_case(str)
-      str.split('_').map { |t| t.capitalize }.join
-    end
-
-    def write_file(file)
-      contents = yield
-      File.open(file, "wb") { |out|
-        out.print(contents)
-      }
-      contents
-    end
-
-    def instance_exec2(obj, *args, &block)
-      method_name = ["_", obj.object_id, "_", Thread.current.object_id].join
-      (class << obj ; self ; end).class_eval do
-        define_method method_name, &block
-        begin
-          obj.send(method_name, *args)
-        ensure
-          remove_method method_name
-        end
-      end
-    end
-  end
-  extend Util
-  include Util
-
-  #### public helpers for testing
-
   class << self
-    # From 'minitest' by Ryan Davis.
+    include Util
+
+    # From minitest, part of the Ruby source; by Ryan Davis.
     def capture_io
       require 'stringio'
 
@@ -726,7 +884,7 @@ class Levitate
       Tempfile.open("run-rdoc-code") { |temp_file|
         temp_file.print(final_code)
         temp_file.close
-        actual = run_file_and_capture(temp_file.path).chomp
+        actual = Ruby.run_file_and_capture(temp_file.path).chomp
       }
 
       instance_exec2(instance, expected, actual, index, &block)
@@ -796,57 +954,5 @@ class Levitate
       end
       Object.const_set("Test#{file}".gsub(".", ""), klass)
     end
-
-    def ruby_opts
-      @ruby_opts ||= []
-    end
-    attr_writer :ruby_opts
-  end
-
-  #### raw install, bypass gems
-
-  class Installer
-    def initialize
-      require 'fileutils'
-      require 'rbconfig'
-      require 'find'
-
-      @fu = FileUtils::Verbose
-      @spec = []
-
-      rb_root = RbConfig::CONFIG["sitelibdir"]
-
-      Find.find "lib" do |source|
-        next if source == "lib"
-        next unless File.directory?(source) || File.extname(source) == ".rb"
-        dest = File.join(rb_root, source.sub(%r!\Alib/!, ""))
-        @spec << [source, dest]
-      end
-    end
-
-    def install
-      @spec.each do |source, dest|
-        if File.directory?(source)
-          @fu.mkdir(dest) unless File.directory?(dest)
-        else
-          @fu.install(source, dest)
-        end
-      end
-    end
-  
-    def uninstall
-      @spec.reverse.each do |source, dest|
-        if File.directory?(source)
-          @fu.rmdir(dest) if File.directory?(dest)
-        else
-          @fu.rm(dest) if File.file?(dest)
-        end
-      end
-    end
   end
 end
-
-lambda do
-  config = File.join(File.dirname(__FILE__), "levitate_config.rb")
-  require config if File.file? config
-end.call
