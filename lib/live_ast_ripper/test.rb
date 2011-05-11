@@ -99,7 +99,7 @@ module LiveASTRipper::Test
      [:bodystmt,
       [[:binary,
         [:var_ref, [:@ident, "x"]],
-        :+,
+        op,
         [:var_ref, [:@ident, "y"]]]],
       nil,
       nil,
