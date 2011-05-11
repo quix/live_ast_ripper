@@ -1,6 +1,10 @@
 
 = live_ast_ripper Changes
 
+== Version 0.6.5
+
+* fix typo in test singleton_binop_def
+
 == Version 0.6.4
 
 * handlers for "def self.foo" and "def A.foo" were missing
